@@ -2,6 +2,9 @@
 import furl.main
 
 import torch
+import numpy as np
+
+from typing import List, Tuple
 
 class Flatten(furl.main.Processor):
     def __call__(self, memory, model):
@@ -30,7 +33,7 @@ class GAE(furl.main.Processor):
     
 
 class Delta(furl.main.Processor):
-    def __init__(self, gamma: float=0.99, current_value: str='current_value', reward: str='reward', next_value: str='next_value', done: str='done'):
+    def __init__(self, gamma: float=0.99, current_value: str='value', reward: str='reward', next_value: str='next_value', done: str='done'):
         self.gamma = gamma
 
         self.reward = reward

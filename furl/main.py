@@ -152,7 +152,7 @@ class Trainer:
             self.strategy.learn(model, memory, optimizer)
 
     def fit(self, model, state_class, total_steps=None, total_time=None):
-        optimizer = optim.Adam(model.parameters(), lr=self.param['lr'])
+        optimizer = optim.Adam(model.parameters(), lr=self.param['lr'], eps=1e-5)
         episodes = [Episode(i, model, state_class(), self.strategy, self.param) for i in range(self.param['num_processes'])]
         for episode in episodes: episode.reset()
         step = 0
