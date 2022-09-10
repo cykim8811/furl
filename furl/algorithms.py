@@ -57,7 +57,7 @@ class A2CStrategy:
 
 
 class PPOStrategy:
-    def __init__(self, gamma: float = 0.99, normalize_advantage: bool = True, norm_eps: float = 1e-8, use_gae: bool = False, gae_lambda: float = 0.95, clip_eps: float = 0.2, ent_coef: float = 0.01):
+    def __init__(self, gamma: float = 0.99, normalize_advantage: bool = True, norm_eps: float = 1e-8, use_gae: bool = False, gae_lambda: float = 0.95, clip_eps: float = 0.2, ent_coef: float = 0.01, vf_coef: float = 0.5, max_grad_norm: float = 0.5):
         self.include_last = True
         self.gamma = gamma
         self.normalize_advantage = normalize_advantage
@@ -66,6 +66,8 @@ class PPOStrategy:
         self.gae_lambda = gae_lambda
         self.clip_eps = clip_eps
         self.ent_coef = ent_coef
+        self.vf_coef = vf_coef
+        self.max_grad_norm = max_grad_norm
 
     def act(self, model, state_tensor):
         with torch.no_grad():
@@ -116,8 +118,9 @@ class PPOStrategy:
         ).mean()
         critic_loss = (memory['return'] - memory['current_value'].squeeze(-1)).pow(2).mean()
         entropy = -(t_logprob.exp() * t_logprob).sum(-1).mean()
-        loss = actor_loss + critic_loss - self.ent_coef * entropy
+        loss = actor_loss + critic_loss * self.vf_coef - entropy * self.ent_coef
         
         optimizer.zero_grad()
         loss.backward()
+        if self.max_grad_norm is not None: nn.utils.clip_grad_norm_(model.parameters(), self.max_grad_norm)
         optimizer.step()
