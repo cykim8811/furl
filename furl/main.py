@@ -3,8 +3,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import torch.distributed as dist
+import torch.multiprocessing as mp
 
 import time
+import os
+import wandb
 
 from typing import Dict, List, Tuple
 
@@ -27,9 +31,15 @@ class Memory:
             self.data = {}
         self.data[key] = value
 
+    def reserve(self, data_like: dict):
+        if self.data is None:
+            self.data = {key: torch.zeros((self.size, *value.shape), dtype=value.dtype, device=value.device) for key, value in data_like.items()}
+        else:
+            raise RuntimeError("Memory is already reserved.")
+
     def add(self, data: dict, force: bool = False):
         if self.data is None:
-            self.data = {key: torch.zeros((self.size, *value.shape), dtype=value.dtype, device=value.device) for key, value in data.items()}
+            self.reserve(data)
         
         if self.index >= self.size:
             if force:
@@ -114,6 +124,10 @@ class Episode:
         self.strategy = strategy
         self.param = param
         self.rank = rank
+        self.logger = None
+    
+    def set_logger(self, logger): # TODO: Change logging implementation
+        self.logger = logger
     
     def step(self):
         model_device = next(self.model.parameters()).device
@@ -130,14 +144,16 @@ class Episode:
         dict_to_device(step_dict, model_device)
         self.memory.add({**state_tensor, **act_dict, **step_dict})
 
-        if self.rank == 0 and step_dict['done']: self.state.log() # TODO: Change logging implementation
+        if step_dict['done'] and self.rank == 0: # TODO: Change logging implementation
+            if self.logger is not None:
+                self.logger(sum(self.state.last_scores)/len(self.state.last_scores))
 
     def reset(self):
         self.state.reset()
-        
 
 class Trainer:
     def __init__(self, param, strategy):
+        mp.set_start_method('spawn')
         self.param = {
             'lr': 0.0001,
             'update_interval': 100,
@@ -146,29 +162,70 @@ class Trainer:
         }
         self.param.update(param)
         self.strategy = strategy
+
+        if 'wandb_project' in param:
+            wandb.init(project=param['wandb_project'], config=param)
+            if 'wandb_sweeps' in param:
+                self.param.update(wandb.config)
+
+    def update(model: nn.Module, optimizer: optim.Optimizer, memory: Memory, param: dict, strategy: Strategy):
+        for epoch in range(param['epochs']):
+            strategy.learn(model, memory, optimizer)
     
-    def update(self, model: nn.Module, optimizer: optim.Optimizer, memory: Memory):
-        for epoch in range(self.param['epochs']):
-            self.strategy.learn(model, memory, optimizer)
+    def run_thread(rank, total_steps, total_time, model, state_class, strategy, param, queue):
+        os.environ['MASTER_ADDR'] = '127.0.0.1'
+        os.environ['MASTER_PORT'] = '29500'
+        dist.init_process_group('gloo', rank=rank, world_size=param['num_processes'])
+
+        episode = Episode(rank, model, state_class(), strategy, param)
+        episode.reset()
+        if rank == 0:
+            optimizer = optim.Adam(model.parameters(), lr=param['lr'], eps=1e-5)
+            episode.set_logger(logger=lambda score: queue.put(score))
+        start_time = time.time()
+        step = 0
+        while (total_steps and step < total_steps) or (total_time and (time.time() - start_time) < total_time) or (not total_steps and not total_time):
+            episode.step()
+            if (step+1) % param['update_interval'] == 0:
+                if strategy.include_last:
+                    last_state = episode.state.to_tensor()
+                    if type(last_state) is torch.Tensor: last_state = {'state': last_state}
+                    dict_to_device(last_state, next(model.parameters()).device)
+                    episode.memory.add(last_state, force=True)
+
+                if rank == 0:
+                    stacked_memory = Memory(param['num_processes'], next(model.parameters()).device)
+                    stacked_memory.reserve(episode.memory.data)
+                    for key in episode.memory.data:
+                        dist.gather(episode.memory[key], [t.squeeze(0) for t in stacked_memory[key].split(1, dim=0)], dst=0)
+                    stacked_memory.index = param['num_processes']
+                    stacked_memory.swapaxes(0, 1)
+                    Trainer.update(model, optimizer, stacked_memory, param, strategy)
+                else:
+                    for key in episode.memory.data:
+                        dist.gather(episode.memory[key], dst=0)
+
+                episode.memory.clear()
+            step += 1
+            dist.barrier()
 
     def fit(self, model, state_class, total_steps=None, total_time=None):
-        optimizer = optim.Adam(model.parameters(), lr=self.param['lr'], eps=1e-5)
-        episodes = [Episode(i, model, state_class(), self.strategy, self.param) for i in range(self.param['num_processes'])]
-        for episode in episodes: episode.reset()
-        step = 0
+        if 'wandb_project' in self.param:
+            wandb.watch(model)
+        processes = []
+        model.share_memory()
+        queue = mp.Queue()
+        for rank in range(self.param['num_processes']):
+            process = mp.Process(target=Trainer.run_thread, args=(rank, total_steps, total_time, model, state_class, self.strategy, self.param, queue))
+            process.start()
+            processes.append(process)
+
         start_time = time.time()
+        step = 0
         while (total_steps and step < total_steps) or (total_time and (time.time() - start_time) < total_time) or (not total_steps and not total_time):
-            for episode in episodes: episode.step()
-            if (step+1) % self.param['update_interval'] == 0:
-                if self.strategy.include_last:
-                    for episode in episodes:
-                        last_state = episode.state.to_tensor()
-                        if type(last_state) is torch.Tensor: last_state = {'state': last_state}
-                        dict_to_device(last_state, next(model.parameters()).device)
-                        episode.memory.add(last_state, force=True)
-                stacked_memory = Memory.stack([episode.memory for episode in episodes])
-                stacked_memory.swapaxes(0, 1)
-                self.update(model, optimizer, stacked_memory)
-                for episode in episodes:
-                    episode.memory.clear()
-            step += 1
+            if queue.empty():
+                time.sleep(1)
+                continue
+            wandb.log({'score': queue.get()})
+        
+        for process in processes: process.join()

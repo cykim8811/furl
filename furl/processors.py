@@ -56,3 +56,15 @@ class Normalize(furl.main.Processor):
         else:
             normalized = memory[self.key] / (memory[self.key].std() + self.eps)
         return normalized
+
+class Minibatch(furl.main.Processor):
+    def __init__(self,target: str, batch_size: int, shuffle: bool=True):
+        self.target = target
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+
+    def __call__(self, memory, model):
+        target = memory[self.target]
+        indices = torch.randperm(target.shape[0]) if self.shuffle else torch.arange(target.shape[0])
+        return torch.stack(target[indices].split(self.batch_size))
+        

@@ -20,7 +20,7 @@ class GymState(furl.main.State):
             self.reset()
         return {
             'reward': torch.tensor(reward),
-            'done': torch.tensor(done),
+            'done': torch.tensor(done).float(),
         }
     
     def reset(self):
@@ -33,7 +33,3 @@ class GymState(furl.main.State):
         
     def to_tensor(self):
         return torch.tensor(np.array(self.obs), dtype=torch.float)
-
-    def log(self): # TODO: Change logging implementation
-        wandb.log({'score': self.last_scores[-1]})
-        self.last_scores = self.last_scores[-100:]
