@@ -146,7 +146,8 @@ class Episode:
 
         if step_dict['done'] and self.rank == 0: # TODO: Change logging implementation
             if self.logger is not None:
-                self.logger(sum(self.state.last_scores)/len(self.state.last_scores))
+                #self.logger(sum(self.state.last_scores)/len(self.state.last_scores))
+                self.logger(self.state.last_scores[-1])
 
     def reset(self):
         self.state.reset()
