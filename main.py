@@ -50,11 +50,11 @@ if __name__ == "__main__":
         'normalize_advantage': True,
         'use_gae': True,
         'gae_lambda': 0.95,
-        'clip_eps': 0.1,
+        'clip_eps': 0.15,
     }
     param={
-        'lr': 0.0003,
-        'update_interval': 128,
+        'lr': 0.002,
+        'update_interval': 384,
         'epochs': 4,
         'num_processes': 4,
         'wandb_project': 'breakout-ppo'

@@ -209,6 +209,8 @@ class PPOLSTMStrategy:
         
         memory['current_logit'] = torch.cat(current_logits)
         memory['current_value'] = torch.cat(current_values)
+
+        # memory['current_logit'], memory['current_value'], _ = model(x_feed, h_feed[0])
         
         memory['current_logit'] = memory['current_logit'].reshape(*additional_dims, -1)
         memory['current_value'] = memory['current_value'].squeeze(-1).reshape(*additional_dims)

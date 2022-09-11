@@ -48,7 +48,7 @@ class BreakoutLSTMModel(nn.Module):
             layer_init(nn.Conv2d(64, 64, 3, stride=1)),
             nn.ReLU(),
         )
-        self.lstm = nn.GRU(3136, 512, batch_first=True)
+        self.lstm = nn.GRU(3136, 512, num_layers=1, batch_first=True)
         for name, param in self.lstm.named_parameters():
             if "bias" in name:
                 nn.init.constant_(param, 0)
