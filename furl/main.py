@@ -98,7 +98,7 @@ class State:
         raise NotImplementedError
 
     # Convert state to tensor. returns a tensor or tuple of tensors
-    def to_tensor(self)->torch.Tensor or Tuple['torch.Tensor']:
+    def to_tensor(self)->torch.Tensor or Dict['torch.Tensor']:
         raise NotImplementedError
 
 
@@ -106,7 +106,7 @@ class Strategy:
     def __init__(self):
         self.include_last = False
 
-    def act(self, model: nn.Module, state_tensor: torch.Tensor)->Dict[str, torch.Tensor]:
+    def act(self, model: nn.Module, state: State)->Dict[str, torch.Tensor]:
         raise NotImplementedError
     
     def learn(self, model: nn.Module, memory: Memory, optimizer: optim.Optimizer):
@@ -134,11 +134,11 @@ class Episode:
         state_tensor = self.state.to_tensor()
         if type(state_tensor) is torch.Tensor:
             state_tensor = state_tensor.to(model_device)
-            act_dict = self.strategy.act(self.model, state_tensor)
+            act_dict = self.strategy.act(self.model, self.state)
             state_tensor = {'state': state_tensor}
         else:
             dict_to_device(state_tensor, model_device)
-            act_dict = self.strategy.act(self.model, state_tensor)
+            act_dict = self.strategy.act(self.model, self.state)
         dict_to_device(act_dict, model_device)
         step_dict = self.state.step(act_dict['action'].item())
         dict_to_device(step_dict, model_device)
