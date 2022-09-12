@@ -127,7 +127,8 @@ class PPOStrategy:
 
 
 class PPOICMStrategy:
-    def __init__(self, gamma: float = 0.99, normalize_advantage: bool = True, norm_eps: float = 1e-8, use_gae: bool = False, gae_lambda: float = 0.95, clip_eps: float = 0.2, ent_coef: float = 0.01, vf_coef: float = 0.5, max_grad_norm: float = 0.5):
+    def __init__(self, gamma: float = 0.99, normalize_advantage: bool = True, norm_eps: float = 1e-8, use_gae: bool = False, gae_lambda: float = 0.95, clip_eps: float = 0.2, ent_coef: float = 0.01, vf_coef: float = 0.5, max_grad_norm: float = 0.5,
+                 forward_loss_coef: float = 0.1, inverse_loss_coef: float = 0.1):
         self.include_last = True
         self.gamma = gamma
         self.normalize_advantage = normalize_advantage
@@ -138,6 +139,8 @@ class PPOICMStrategy:
         self.ent_coef = ent_coef
         self.vf_coef = vf_coef
         self.max_grad_norm = max_grad_norm
+        self.forward_loss_coef = forward_loss_coef
+        self.inverse_loss_coef = inverse_loss_coef
 
     def act(self, model, state_tensor):
         with torch.no_grad():
@@ -197,9 +200,7 @@ class PPOICMStrategy:
         critic_loss = (memory['return'] - memory['current_value'].squeeze(-1)).pow(2).mean()
         entropy = -(t_logprob.exp() * t_logprob).sum(-1).mean()
 
-        icm_loss = (memory['intrinsic_reward'] ** 2).mean() + inverse_loss
-
-        loss = actor_loss + critic_loss * self.vf_coef - entropy * self.ent_coef + icm_loss
+        loss = actor_loss + critic_loss * self.vf_coef - entropy * self.ent_coef + self.forward_loss_coef * (memory['intrinsic_reward'] ** 2).mean() + self.inverse_loss_coef * inverse_loss
         
         optimizer.zero_grad()
         loss.backward()

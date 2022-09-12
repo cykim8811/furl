@@ -45,7 +45,9 @@ if __name__ == "__main__":
         'update_interval': 128,
         'epochs': 4,
         'num_processes': 3,
-        'wandb_project': 'breakout-icm'
+        'wandb_project': 'breakout-icm',
+        'forward_loss_coef': 10.0,
+        'inverse_loss_coef': 0.3,
     }
     strategy = furl.algorithms.PPOICMStrategy(**strategy_param)
     trainer = furl.Trainer(param, strategy)
