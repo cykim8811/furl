@@ -146,8 +146,8 @@ class Episode:
 
         if step_dict['done'] and self.rank == 0: # TODO: Change logging implementation
             if self.logger is not None:
-                #self.logger(sum(self.state.last_scores)/len(self.state.last_scores))
-                self.logger(self.state.last_scores[-1])
+                self.logger(sum(self.state.last_scores)/len(self.state.last_scores))
+                #self.logger(self.state.last_scores[-1])
 
     def reset(self):
         self.state.reset()
@@ -227,6 +227,9 @@ class Trainer:
             if queue.empty():
                 time.sleep(1)
                 continue
-            wandb.log({'score': queue.get()})
+            score = queue.get()
+            wandb.log({'score': score})
+            print(f'Step {step:7d}: {score:6.2f}')
+            step += 1
         
         for process in processes: process.join()

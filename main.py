@@ -45,7 +45,7 @@ if __name__ == "__main__":
         'update_interval': 128,
         'epochs': 4,
         'num_processes': 4,
-        'wandb_project': 'breakout-ppo'
+        'wandb_project': 'breakout-icm'
     }
     strategy = furl.algorithms.PPOStrategy(**strategy_param)
     trainer = furl.Trainer(param, strategy)
