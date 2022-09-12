@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from models.cartpole import CartpoleModel
-from models.breakout import BreakoutModel
+from models.breakout import BreakoutModel, BreakoutICMModel
 
 import wandb
 
@@ -32,10 +32,10 @@ def make_cartpole_state():
     return furl.gym.GymState(env)
 
 if __name__ == "__main__":
-    model = BreakoutModel().cuda()
+    model = BreakoutICMModel().cuda()
     strategy_param = {
         'gamma': 0.99,
-        'normalize_advantage': False,
+        'normalize_advantage': True,
         'use_gae': True,
         'gae_lambda': 0.95,
         'clip_eps': 0.2,
@@ -44,9 +44,9 @@ if __name__ == "__main__":
         'lr': 0.001,
         'update_interval': 128,
         'epochs': 4,
-        'num_processes': 4,
+        'num_processes': 3,
         'wandb_project': 'breakout-icm'
     }
-    strategy = furl.algorithms.PPOStrategy(**strategy_param)
+    strategy = furl.algorithms.PPOICMStrategy(**strategy_param)
     trainer = furl.Trainer(param, strategy)
     trainer.fit(model, make_breakout_state, total_steps=None)
