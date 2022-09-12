@@ -51,10 +51,7 @@ class Normalize(furl.main.Processor):
 
     def __call__(self, memory, model):
         normalized = (memory[self.key] - memory[self.key].mean())
-        if (memory[self.key].std() < self.eps).any():
-            print("Warning: {} not being normalized. Standard deviation is too small".format(self.key))
-        else:
-            normalized = memory[self.key] / (memory[self.key].std() + self.eps)
+        normalized = memory[self.key] / (memory[self.key].std() + self.eps)
         return normalized
 
 class Minibatch(furl.main.Processor):
