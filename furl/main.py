@@ -173,12 +173,12 @@ class Trainer:
         for epoch in range(param['epochs']):
             strategy.learn(model, memory, optimizer)
     
-    def run_thread(rank, total_steps, total_time, model, state_class, strategy, param, queue):
+    def run_thread(rank, total_steps, total_time, model, state, strategy, param, queue):
         os.environ['MASTER_ADDR'] = '127.0.0.1'
         os.environ['MASTER_PORT'] = '29500'
         dist.init_process_group('gloo', rank=rank, world_size=param['num_processes'])
 
-        episode = Episode(rank, model, state_class(), strategy, param)
+        episode = Episode(rank, model, state, strategy, param)
         episode.reset()
         if rank == 0:
             optimizer = optim.Adam(model.parameters(), lr=param['lr'], eps=1e-5)
@@ -217,7 +217,7 @@ class Trainer:
         model.share_memory()
         queue = mp.Queue()
         for rank in range(self.param['num_processes']):
-            process = mp.Process(target=Trainer.run_thread, args=(rank, total_steps, total_time, model, state_class, self.strategy, self.param, queue))
+            process = mp.Process(target=Trainer.run_thread, args=(rank, total_steps, total_time, model, state_class(), self.strategy, self.param, queue))
             process.start()
             processes.append(process)
 
